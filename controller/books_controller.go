@@ -80,13 +80,11 @@ func GetBooks(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(books)
 }
 
-func ReturnBook(w http.ResponseWriter, r *http.Request) {
+func GetBookById(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-
 	query := "SELECT * FROM books WHERE id = ?"
 	row := db.QueryRow(query, id)
-
 	var book model.Book
 	if err := row.Scan(&book.Id, &book.Name, &book.Author, &book.Published); err != nil {
 		if err == sql.ErrNoRows {
@@ -114,12 +112,6 @@ func AddNewBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// lastInsertID, err := result.LastInsertId()
-	// if err != nil {
-	//     http.Error(w, err.Error(), http.StatusInternalServerError)
-	//     return
-	// }
 
 	var lastInsertID int64
 	selectQuery := "SELECT LAST_INSERT_ID()"

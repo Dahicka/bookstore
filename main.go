@@ -14,7 +14,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/book", controller.UpdateBook).Methods("PUT")
 	myRouter.HandleFunc("/books", controller.GetBooks)
 	myRouter.HandleFunc("/book/{id}", controller.DeleteBook).Methods("DELETE")
-	myRouter.HandleFunc("/book/{id}", controller.ReturnBook)
+	myRouter.HandleFunc("/book/{id}", controller.GetBookById)
 
 	log.Fatal(http.ListenAndServe("", myRouter))
 }
