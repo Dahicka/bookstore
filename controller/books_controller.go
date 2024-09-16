@@ -4,35 +4,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
+	db "github.com/Dahicka/bookstore/database"
 	"github.com/Dahicka/bookstore/model"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 )
-
-var db *sql.DB
-
-func init() {
-	var err error
-	db, err = sql.Open("mysql", "root:test123@tcp(127.0.0.1:3306)/booksdb")
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err = db.Ping(); err != nil {
-		log.Fatal(err)
-	}
-}
-func CloseDB() {
-	if db != nil {
-		err := db.Close()
-		if err != nil {
-			log.Println("Error closing DB:", err)
-		}
-	}
-}
 
 func GetBooks(w http.ResponseWriter, r *http.Request) {
 	page := r.URL.Query().Get("page")
@@ -53,16 +32,7 @@ func GetBooks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid limit number", http.StatusBadRequest)
 		return
 	}
-
-	offset := (pageNum - 1) * limitNum
-	query := "SELECT * FROM books LIMIT ? OFFSET ?"
-	rows, err := db.Query(query, limitNum, offset)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
+	rows := db.SelectAllWithPagination(pageNum, limitNum, w)
 	var books []model.Book
 	for rows.Next() {
 		var book model.Book
@@ -83,12 +53,11 @@ func GetBooks(w http.ResponseWriter, r *http.Request) {
 func GetBookById(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-	query := "SELECT * FROM books WHERE id = ?"
-	row := db.QueryRow(query, id)
+	row := db.SelectById(id)
 	var book model.Book
 	if err := row.Scan(&book.Id, &book.Name, &book.Author, &book.Published); err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "ID does not exist", http.StatusNotFound)
+			http.Error(w, "Id does not exist", http.StatusNotFound)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -106,18 +75,10 @@ func AddNewBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "INSERT INTO books (name, author, published) VALUES (?, ?, ?)"
-	_, err = db.Exec(query, newBook.Name, newBook.Author, newBook.Published)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	result := db.InsertNewBook(newBook.Name, newBook.Author, newBook.Published, w)
 
-	var lastInsertID int64
-	selectQuery := "SELECT LAST_INSERT_ID()"
-	err = db.QueryRow(selectQuery).Scan(&lastInsertID)
+	lastInsertID, err := result.LastInsertId()
 	if err != nil {
-		log.Println("Error retrieving last insert ID:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -130,13 +91,7 @@ func AddNewBook(w http.ResponseWriter, r *http.Request) {
 func DeleteBook(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-
-	query := "DELETE FROM books WHERE id = ?"
-	result, err := db.Exec(query, id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	result := db.DeleteById(id, w)
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -147,6 +102,8 @@ func DeleteBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Id does not exist", http.StatusNotFound)
 		return
 	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func UpdateBook(w http.ResponseWriter, r *http.Request) {
@@ -156,13 +113,6 @@ func UpdateBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	query := `UPDATE books SET name = ?, author = ?, published = ? WHERE id = ?`
-	_, err = db.Exec(query, newBook.Name, newBook.Author, newBook.Published, newBook.Id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	db.UpdateById(newBook.Name, newBook.Author, newBook.Published, newBook.Id, w)
 	w.WriteHeader(http.StatusNoContent)
 }
